@@ -190,7 +190,7 @@ class CrosswordCreator():
         """
         
         for var in self.domains:
-            if var not in assignment:
+            if var not in assignment or assignment[var] is None:
                 return False
             
         return True
@@ -249,14 +249,15 @@ class CrosswordCreator():
             words.append(word)
             n[word] = 0
             for neighbor in self.crossword.neighbors(var):
-                # If the neighbor is not in assignment and the word is in the neighbor's domain
+                # If the neighbor is not in assignment and and the word is in the neighbor's domain
                 if neighbor not in assignment and word in self.domains[neighbor]:
+                    # We add 1 to n
                     n[word] += 1
 
         print(n)
         # We return the sorted words list depending on the n values associated with each word
         res = sorted(words, key=lambda w: n[w])
-        
+
         return res
 
                     
@@ -275,7 +276,7 @@ class CrosswordCreator():
         currentMinVar = None
         
         for var in self.domains:
-            print(var)
+            
             if var not in assignment:
                 if len(self.domains[var]) < minValues:
                     minValues = len(self.domains[var])
@@ -298,8 +299,7 @@ class CrosswordCreator():
             return assignment
 
         var = self.select_unassigned_variable(assignment)
-        #if var is None:
-            #return assignment
+        
 
         for value in self.domains[var]:
             # Need to make sure that this value is not already assigned
