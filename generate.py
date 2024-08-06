@@ -102,9 +102,9 @@ class CrosswordCreator():
 
         #Iterate on each var and than on each words to remove the ones that are not the same length
         for var in self.domains:
-            for word in self.domains[var]:
-                if self.domains[var].length != len(word):
-                    self.domain[var].remove(word)
+            for word in self.domains[var].copy():
+                if var.length != len(word):
+                    self.domains[var].remove(word)
 
 
     def revise(self, x, y):
@@ -116,24 +116,35 @@ class CrosswordCreator():
         Return True if a revision was made to the domain of `x`; return
         False if no revision was made.
         """
-        
-        for xWord in self.domains[x]:
-            #If xWord is in the y domains, iterate on this domain
-            if xWord in self.domains[y]:
-                for yWord in self.domains[y]:
-                    if self.overlaps[xWord, yWord] is not None:
-                        # There is an overlap between x and y
-                        # We need to verify if the two word can satisfy this overlap
-                        xIndex = self.overlaps[x, y][0]
-                        yIndex = self.overlaps[x, y][1]
-                        if xWord[xIndex] != yWord[yIndex]:
-                            # x is not arc consistant with y, we need to remove
-                            # y from x's domains
-                            self.demains[x].remove(y)
-                            return True
-        return False
+        flag = False
 
+        wordsToRemove = []
 
+        overlap = self.crossword.overlaps.get((x, y))
+
+        if overlap:
+            xIndex, yIndex = overlap
+
+            # We have an overlap
+            for xWord in self.domains[x].copy():
+                removeWord = True
+                
+                for yWord in self.domains[y].copy():
+                    # We need to verify if the two word can satisfy this overlap
+                    if xWord[xIndex] == yWord[yIndex]:
+                        # yWord satisfies the condition, no need to remove a word from x's domain
+                        removeWord = False
+                        break
+
+                if removeWord:
+                    # If no yWord is correct, we need to remove xWord from x's domain
+                    wordsToRemove.append(xWord)
+                    flag = True
+        # Remove the needed words from x's domain 
+        for word in wordsToRemove:
+            self.domains[x].remove(word)
+                        
+        return flag
 
     def ac3(self, arcs=None):
         """
@@ -150,21 +161,23 @@ class CrosswordCreator():
         if arcs is None:
             arcs = []
             # If no arcs list is specified, we build a queue containing all the arcs
-            for overlap in self.overlaps:
+            for overlap in self.crossword.overlaps:
                 arcs.append(overlap)
     
         # Once we have our queue, we pop every item ensuring arc consistency for each
         while arcs:
             # pop the first element (FIFO)
             currentArc = arcs.pop(0)
+            #print(currentArc)
             if self.revise(currentArc[0], currentArc[1]):
-                if self.domains[currentArc[0]] == {}:
+                if not self.domains[currentArc[0]]:
                     # If the modified domain is now empty, return False
                     return False
                 # currentArc[0] variable was modified,we need to add the variables
                 # that share a constraint with currentArc[0] in the queue
                 for neighbor in self.crossword.neighbors(currentArc[0]):
-                    arcs.append(neighbor)
+                    if (neighbor, currentArc[0]) not in arcs:
+                        arcs.append((neighbor, currentArc[0]))
 
         return True
         
@@ -176,8 +189,8 @@ class CrosswordCreator():
         crossword variable); return False otherwise.
         """
         
-        for var in assignment:
-            if assignment[var] is None:
+        for var in self.domains:
+            if var not in assignment:
                 return False
             
         return True
@@ -192,7 +205,9 @@ class CrosswordCreator():
         # To do so we will create a list and a set with all the values, if the len of the 
         # two is not the same, there are duplicates (Sets get rid of ducplicates)
 
+        print(assignment)
         variables = list(assignment.values())
+        print(variables)
         setVariables = set(variables)
 
         if len(variables) != len(setVariables):
@@ -201,13 +216,21 @@ class CrosswordCreator():
         # Then we want to make sure the lengths are correct and that there are no conflicts
         # between neighboring variables
         for var in assignment:
-            if (self.domains[var].length != len(assignment[var])):
+            print(assignment[var])
+            if (var.length != len(assignment[var])):
                 return False
             neighbors = self.crossword.neighbors(var)
+            
             if neighbors:
                 for neighbor in neighbors:
-                    if assignment[var][self.overlap[var, neighbor][0]] != assignment[neighbor][self.overlap[var, neighbor][1]]:
-                        return False
+                    overlap = self.crossword.overlaps.get((var, neighbor))
+                    if overlap and neighbor in assignment:
+                        # If there is an overlap and the neighbor is in assignment, we need to verify
+                        # if the overlap is satisfied
+                        xIndex, yIndex = overlap
+                        if assignment[var][xIndex] != assignment[neighbor][yIndex]:
+                            return False
+                    #assignment[var][self.crossword.overlaps[var, neighbor][0]] != assignment[neighbor][self.crossword.overlaps[var, neighbor][1]]:
         
         return True
 
@@ -221,16 +244,21 @@ class CrosswordCreator():
 
         words = []
         n = {}
-        for index, word in enumerate(self.domains[var]):
+
+        for word in self.domains[var]:
             words.append(word)
-            for neighbor in self.crossword.neighbors[var]:
-                # If the neighbor is not in assignment and and the word is in the neighbor's domain
-                if neighbor not in assignment and word in self.domain[neighbor]:
-                    # We add 1 to n
-                    n[index] += 1
-        
+            n[word] = 0
+            for neighbor in self.crossword.neighbors(var):
+                # If the neighbor is not in assignment and the word is in the neighbor's domain
+                if neighbor not in assignment and word in self.domains[neighbor]:
+                    n[word] += 1
+
+        print(n)
         # We return the sorted words list depending on the n values associated with each word
-        return sorted(words, key=n.__getitem__)
+        res = sorted(words, key=lambda w: n[w])
+        
+        return res
+
                     
         #return list(word for word in self.domains[var] if word not in assignment)
 
@@ -243,6 +271,18 @@ class CrosswordCreator():
         return values.
         """
         
+        minValues = float('inf')
+        currentMinVar = None
+        
+        for var in self.domains:
+            print(var)
+            if var not in assignment:
+                if len(self.domains[var]) < minValues:
+                    minValues = len(self.domains[var])
+                    currentMinVar = var
+
+        return currentMinVar
+
 
     def backtrack(self, assignment):
         """
@@ -253,7 +293,25 @@ class CrosswordCreator():
 
         If no assignment is possible, return None.
         """
-        raise NotImplementedError
+        # If the assignment received is already complete and consistent we return it
+        if self.assignment_complete(assignment) and self.consistent(assignment):
+            return assignment
+
+        var = self.select_unassigned_variable(assignment)
+        #if var is None:
+            #return assignment
+
+        for value in self.domains[var]:
+            # Need to make sure that this value is not already assigned
+            if value not in assignment.values():
+                assignment[var] = value
+                result = self.backtrack(assignment)
+                if result:
+                    return result
+                assignment[var] = None
+        
+        return None
+
 
 
 def main():
