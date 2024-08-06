@@ -249,14 +249,13 @@ class CrosswordCreator():
             words.append(word)
             n[word] = 0
             for neighbor in self.crossword.neighbors(var):
-                # If the neighbor is not in assignment and and the word is in the neighbor's domain
+                # If the neighbor is not in assignment and the word is in the neighbor's domain
                 if neighbor not in assignment and word in self.domains[neighbor]:
-                    # We add 1 to n
                     n[word] += 1
 
         print(n)
         # We return the sorted words list depending on the n values associated with each word
-        res = sorted(words, key=lambda w: n[w])
+        res = sorted(words, key=lambda w: n.get(w, 0))
 
         return res
 
